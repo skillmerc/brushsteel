@@ -1,0 +1,24 @@
+{
+  "name": "brushsteel",
+  "version": "0.0.1",
+  "private": true,
+  "description": "BRUSHSTEEL, an ink-brush duel. OpenGame Game Jam #1 entry, Fighting track.",
+  "type": "module",
+  "scripts": {
+    "pretest": "node -e \"require('fs').rmSync('.test-build',{recursive:true,force:true})\"",
+    "test": "tsc -p tsconfig.test.json && tsc -p src/input/tsconfig.test.json && node --test \".test-build/**/*.test.js\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && vite build",
+    "build:single": "tsc -p tsconfig.json && vite build --config vite.single.config.ts"
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/three": "0.187.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vite-plugin-singlefile": "2.3.4"
+  }
+}

@@ -1,0 +1,210 @@
+# BRUSHSTEEL CI.
+# QUICK job: on every push and pull request (install, unit tests, build with type check, size report,
+# one first-frame check at 1920x1080 with ci/first-frame.mjs; about 3 minutes).
+# FULL job: on push to main once the repo is public (free minutes), and by hand (everything in the quick job plus ci/smoke.mjs: fps,
+# live resize, front screens at three sizes, Path screens, gamepad, ink presets, scripted duel,
+# heap after 3 duels, clip; about 18 to 27 minutes).
+#   gh workflow run ci.yml -f job=full   (job=quick for the quick job alone, job=both)
+name: ci
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - 'play/**'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'play/**'
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "full (every check, about 18 to 27 min), quick (about 3 min) or both"
+        type: choice
+        options: [full, quick, both]
+        default: full
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}-${{ inputs.job || 'push' }}
+  cancel-in-progress: true
+jobs:
+  quick:
+    name: BRUSHSTEEL quick smoke (build, tests, first frame)
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.job == 'quick' || inputs.job == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            game/package-lock.json
+            ci/package-lock.json
+      - name: Install game dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Build (tsc type check, then vite)
+        run: npm run build
+      - name: Size report (fail over 20 MB or no dist/index.html)
+        working-directory: ci
+        run: node size.mjs ../game/dist out
+      - name: Install Playwright
+        working-directory: ci
+        run: npm ci --no-audit --no-fund
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-shell-${{ hashFiles('ci/package-lock.json') }}
+      - name: Chromium headless shell (download skipped on a cache hit) and its system libraries
+        working-directory: ci
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: First frame at 1920x1080, not blank, no console errors
+        working-directory: ci
+        run: node first-frame.mjs ../game/dist out
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brushsteel-quick
+          path: |
+            ci/out/quick.json
+            ci/out/size.json
+            ci/out/screens/
+          retention-days: 7
+          if-no-files-found: warn
+  build-smoke:
+    name: BRUSHSTEEL build, smoke test and clip (full)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.private) || (github.event_name == 'workflow_dispatch' && (inputs.job == 'full' || inputs.job == 'both'))
+    runs-on: ubuntu-latest
+    # 30: the front screens at 3440x1440 and on live resize take about 11 minutes under SwiftShader.
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            game/package-lock.json
+            ci/package-lock.json
+      - name: Install game dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Size report (fail over 20 MB or no dist/index.html)
+        working-directory: ci
+        run: node size.mjs ../game/dist out
+      - name: Install Playwright
+        working-directory: ci
+        run: npm ci --no-audit --no-fund
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-chromium-${{ hashFiles('ci/package-lock.json') }}
+      - name: Chromium (download skipped on a cache hit) and its system libraries
+        working-directory: ci
+        run: npx playwright install --with-deps chromium
+      - name: Smoke test, fps, resize, screenshots and clip
+        working-directory: ci
+        run: node smoke.mjs ../game/dist out
+      - name: Path mode screens and a run with storage switched off
+        working-directory: ci
+        run: |
+          cat > path-shot.mjs <<'EOF'
+          // Written by the workflow: photographs the Path screens from
+          // ?demo=path (fixed scroll of 20 Nov 2026, kept in memory) and plays the start of a run
+          // with localStorage throwing (private mode). Fails on any console or page error.
+          import fs from 'node:fs';
+          import http from 'node:http';
+          import path from 'node:path';
+          import { chromium } from 'playwright';
+          const dist = path.resolve('../game/dist');
+          const out = path.resolve('out/screens');
+          fs.mkdirSync(out, { recursive: true });
+          const server = http.createServer((req, res) => {
+            let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+            if (p.endsWith('/')) p += 'index.html';
+            const file = path.join(dist, path.normalize(p));
+            if (!file.startsWith(dist) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+            res.writeHead(200, { 'Content-Type': file.endsWith('.js') ? 'text/javascript' : 'text/html; charset=utf-8' });
+            fs.createReadStream(file).pipe(res);
+          });
+          await new Promise((r) => server.listen(0, '127.0.0.1', r));
+          const url = `http://127.0.0.1:${server.address().port}/`;
+          const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+          const errors = [];
+          const fails = [];
+          const open = async (q, init) => {
+            const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+            page.on('pageerror', (e) => errors.push(q + ' pageerror ' + String(e)));
+            page.on('console', (m) => { if (m.type() === 'error') errors.push(q + ' console.error ' + m.text()); });
+            if (init) await page.addInitScript(init);
+            await page.goto(url + q, { waitUntil: 'load', timeout: 30000 });
+            return page;
+          };
+          for (const screen of ['map', 'shrine', 'brush', 'end']) {
+            const q = '?demo=path&shots=1' + (screen === 'map' ? '' : '&screen=' + screen);
+            const page = await open(q);
+            await page.waitForFunction((s) => document.getElementById('stage')?.dataset.photo === s, screen, { timeout: 30000 });
+            await page.waitForTimeout(400);
+            const text = await page.evaluate(() => document.querySelector('.bs-path')?.textContent || '');
+            fs.writeFileSync(path.join(out, `path-${screen}.txt`), text);
+            await page.screenshot({ path: path.join(out, `path-${screen}-1920x1080.png`) });
+            console.log(screen, JSON.stringify(text.slice(0, 400)));
+            if (/undefined|NaN|TODO|lorem/i.test(text)) fails.push(screen + ': placeholder text');
+            if (screen === 'map') {
+              if (!text.includes('Daily scroll, 20 Nov (UTC)')) fails.push('map: no UTC daily scroll label');
+              if (!text.includes('End run')) fails.push('map: no End run');
+              const go = await page.locator('.bs-pmap g.go').count();
+              console.log('map: reachable nodes', go);
+              if (go < 1) fails.push('map: no reachable node');
+            }
+            if (screen === 'shrine' && (await page.locator('.bs-pc p').count()) !== 3) fails.push('shrine: not 3 seal texts');
+            if (screen === 'brush' && (await page.locator('.bs-pc p').count()) !== 3) fails.push('brush: not 3 brush texts');
+            await page.close();
+          }
+          // Private mode: every localStorage use throws. The run must still play, with no error.
+          const priv = await open('?mode=path', () => {
+            Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('denied', 'SecurityError'); } });
+          });
+          await priv.waitForFunction(() => document.getElementById('stage')?.dataset.mode === 'path-brush', null, { timeout: 30000 });
+          await priv.locator('.bs-pc button').nth(1).click();
+          await priv.waitForFunction(() => document.getElementById('stage')?.dataset.mode === 'path-map', null, { timeout: 10000 });
+          await priv.locator('.bs-pmap g.go').first().click();
+          await priv.waitForFunction(() => document.getElementById('stage')?.dataset.mode === 'path-duel', null, { timeout: 10000 });
+          await priv.waitForTimeout(1500);
+          await priv.screenshot({ path: path.join(out, 'path-private-duel-1920x1080.png') });
+          console.log('private mode: brush picked, map shown, duel started, master', await priv.evaluate(() => document.getElementById('stage')?.dataset.master));
+          await browser.close();
+          server.close();
+          for (const e of errors) console.log('error:', e.slice(0, 300));
+          if (errors.length) fails.push(errors.length + ' console or page error(s)');
+          if (fails.length) { console.error('FAIL: ' + fails.join('; ')); process.exit(1); }
+          console.log('Path screens OK');
+          EOF
+          node path-shot.mjs
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brushsteel-smoke
+          path: |
+            ci/out/fps.json
+            ci/out/size.json
+            ci/out/screens/
+            ci/out/clip-1280x720.webm
+          retention-days: 14
+          if-no-files-found: warn

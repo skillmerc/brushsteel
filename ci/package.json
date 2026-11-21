@@ -1,0 +1,14 @@
+{
+  "name": "brushsteel-ci",
+  "version": "0.0.1",
+  "private": true,
+  "description": "BRUSHSTEEL CI only: size report and headless smoke test. Runs in GitHub Actions.",
+  "type": "module",
+  "scripts": {
+    "size": "node size.mjs",
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}
