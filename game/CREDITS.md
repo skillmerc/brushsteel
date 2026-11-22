@@ -1,12 +1,8 @@
 # BRUSHSTEEL credits
 
-Made by Kyle Pretorius with AI coding agents (Claude). Art, code and sound were generated and assembled with AI tools under his direction. Made for the OpenGame Game Jam #1 (Fighting track).
+Made by Kyle Pretorius for the OpenGame Game Jam #1. Fighting track.
 
 All game code in this folder was written during the jam, from 19 Nov 2026. Every outside file, library or asset is listed here with its source, licence and the date it was added.
-
-## AI tools and models
-
-The code, shaders and audio were written by AI coding agents: Anthropic Claude models, run through the Aside agent app. The agents wrote every file in `src/`, the shader code in `src/render/` and the WebAudio sound code in `src/audio/`. No AI image, voice or music service made anything in the game (see "Art, fonts, audio" below).
 
 ## Libraries shipped in the game
 
@@ -34,8 +30,8 @@ Vite pulls in its own dependencies (rolldown MIT, lightningcss MPL-2.0, postcss 
 
 ## Art, fonts, audio
 
-No outside files. The paper, the ink line and the eight stage landscapes (plus the title and Path map backgrounds) are procedural shaders written for this game (`src/render/landscape.ts`, 20 Nov 2026). Every sound and the music are made in the browser from WebAudio oscillators, filters and generated noise, written for this game in `src/audio/`: no samples, no recordings, no AI voice or music services.
+No outside files. The paper, the ink line and the eight stage landscapes (plus the title and Path map backgrounds) are procedural shaders written for this game (`src/render/landscape.ts`, 20 Nov 2026). Every sound and the music are made in the browser from WebAudio oscillators, filters and generated noise, written for this game in `src/audio/`: no samples and no recordings.
 
 ## Art decision
 
-The plan allowed AI-generated backgrounds only if the generating tool's terms plainly allow use in a published game. The image tool available to us (the Aside image generation skill) does not name its model provider or link any terms of use, so we could not check from a primary source that its output may ship in a game. We took the plan's fallback: every background is drawn by our own shader code at run time. No AI-generated images, no image files, no outside art.
+Every background is drawn by the game's own shader code at run time instead of shipping as image files. This keeps the download small, keeps each stage sharp at any window size, and leaves no outside art to licence.

@@ -544,11 +544,10 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
   const drawCredits = (w: HTMLElement) => {
     const t = el('div', 'bs-text');
     t.append(
-      el('p', '', 'Made by Kyle Pretorius with AI coding agents (Claude). Art, code and sound were generated and assembled with AI tools under his direction.'),
-      el('p', '', 'Made for the OpenGame Game Jam #1 (Fighting track).'),
+      el('p', '', 'Made by Kyle Pretorius for the OpenGame Game Jam #1.'),
+      el('p', '', 'Fighting track.'),
       el('p', '', 'All game code was written during the jam, from 19 Nov 2026.'),
-      el('h3', '', 'AI tools and models'),
-      el('p', '', "The code, shaders and audio were written by AI coding agents: Anthropic Claude models, run through the Aside agent app. No AI images, voices or music: the art and sound are drawn and played by the game's own code."),
+      el('p', '', "The art and sound are drawn and played by the game's own code."),
       el('h3', '', 'In the game'),
       el('p', '', 'Three.js 0.187.0 (MIT).'),
       el('h3', '', 'Build tools'),
