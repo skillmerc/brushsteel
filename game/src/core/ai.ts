@@ -36,6 +36,26 @@ import {
  */
 export const REAL_LINE_FLOOR_MS = 350;
 
+/**
+ * Mashing. A player attack that starts
+ * within CHAIN_MS of the start of the player's previous attack is a chained
+ * stroke, and for CHAIN_MS after any player attack the master is "being
+ * mashed". Masters 2 to 8 then fight the way Oro fights every stroke: they cut
+ * each chained stroke that can reach them (even from mid-step, as the core
+ * allows) and do not strike back or rush the stunned player after that cut;
+ * they dip when the player dips; they drop their feints and show slow
+ * committed lines of MASH_LINE_MS, so a stroke thrown into one is turned
+ * aside; and they wait MASH_PRESS_EXTRA_MS longer before pressing. A single
+ * deliberate stroke keeps the master's parry chance and riposte. The window
+ * spans a point pause, so mashing straight after a point is still a chain.
+ * Oro (cutsFirst) is unchanged.
+ */
+export const CHAIN_MS = 4500;
+export const MASH_LINE_MS = 800;
+export const MASH_PRESS_EXTRA_MS = 5000;
+/** A master dips with a mashing player who dips when its own ink is under this. */
+export const MASH_DIP_BELOW = 60;
+
 /** Stage height used for telegraph lines (fit.ts: 16 x 9, y from -4.5 to 4.5). */
 export const STAGE_HALF_H = 4.5;
 /** Stage half width of the fit.ts frame (lines may run past the walls at 7.5, not past the frame). */
@@ -264,6 +284,12 @@ interface AiMemory {
   feintFollowUntil: number;
   /** Kind of the foe's most recent stroke (for the mirror). */
   foeLastKind: AttackKind | null;
+  /** Start tick of the foe's previous attack (for chained strokes), -1 for none. */
+  foeLastStrike: number;
+  /** The judged foe line is a chained stroke. */
+  chained: boolean;
+  /** No riposte and no rush before this tick (after cutting a chained stroke). */
+  calmUntil: number;
   lastPhase: string;
   feints: number;
 }
@@ -280,7 +306,7 @@ export function createAi(style: AiStyle, who: 0 | 1, seed: number): AiController
     who,
     style,
     rng: createRng((seed ^ 0x9e3779b9 ^ (who * 0x85ebca6b)) >>> 0),
-    mem: { pressAt: -1, judged: -1, parryAt: 0, willParry: false, feintDropAt: -1, feintFollow: null, feintFollowUntil: -1, foeLastKind: null, lastPhase: 'fight', feints: 0 },
+    mem: { pressAt: -1, judged: -1, parryAt: 0, willParry: false, feintDropAt: -1, feintFollow: null, feintFollowUntil: -1, foeLastKind: null, foeLastStrike: -1, chained: false, calmUntil: -1, lastPhase: 'fight', feints: 0 },
   };
 }
 
@@ -337,7 +363,7 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   }
 
   // Riposte after our parry: a full-telegraph cut still lands inside the stun.
-  if (me.riposte > 0 && canAct(me) && style.riposte !== false) {
+  if (me.riposte > 0 && canAct(me) && style.riposte !== false && state.tick >= mem.calmUntil) {
     const k = pickKind(rng, { cut: 1, overhead: 0, rising: 0, thrust: 1 }, gap, rules);
     if (gap <= reachOf(k, rules)) {
       const line = telegraphSegment(k, me, rng.next(), rules);
@@ -352,20 +378,24 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   if (t && t.startTick !== mem.judged) {
     mem.judged = t.startTick;
     mem.foeLastKind = t.kind;
-    mem.willParry = threatens(t, gap, rules) && rng.next() < style.parryChance;
+    mem.chained = !style.cutsFirst && mem.foeLastStrike >= 0 && t.startTick - mem.foeLastStrike <= msToTicks(CHAIN_MS, rules);
+    mem.foeLastStrike = t.startTick;
+    // A chained stroke is always cut (the rng is still rolled, so other rolls stay the same).
+    mem.willParry = threatens(t, gap, rules) && (rng.next() < style.parryChance || mem.chained);
     mem.parryAt = t.startTick + msToTicks(style.reactionMs, rules);
   }
   // Oro: a line out of reach when it appeared is cut once it comes into reach.
   if (t && style.cutsFirst && !mem.willParry && mem.judged === t.startTick && threatens(t, gap, rules) && t.landsAtTick > state.tick) {
     mem.willParry = rng.next() < style.parryChance;
   }
-  const freeToParry = style.cutsFirst ? me.stun === 0 && me.recover === 0 && me.dip === 0 && me.strike === null : canAct(me);
+  const freeToParry = style.cutsFirst || mem.chained ? me.stun === 0 && me.recover === 0 && me.dip === 0 && me.strike === null : canAct(me);
   if (t && mem.willParry && mem.judged === t.startTick && state.tick >= mem.parryAt && freeToParry) {
     mem.willParry = false;
+    if (mem.chained) mem.calmUntil = state.tick + msToTicks(rules.RIPOSTE_MS, rules) + 1;
     return strokeAction('cut', parryCutAcross(t.segment));
   }
   // Oro waits to cut a judged player line; he never starts his own press over it (his tell).
-  if (t && style.cutsFirst && mem.willParry && mem.judged === t.startTick) return null;
+  if (t && (style.cutsFirst || mem.chained) && mem.willParry && mem.judged === t.startTick) return null;
 
   if (!canAct(me)) return null;
 
@@ -387,6 +417,11 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
     }
   }
 
+  // Being mashed: the player attacked within CHAIN_MS. Oro is left as he is.
+  const mashed = !style.cutsFirst && mem.foeLastStrike >= 0 && state.tick - mem.foeLastStrike <= msToTicks(CHAIN_MS, rules);
+  // Dip when a mashing player dips, so its fresh ink never meets this master dipping.
+  if (mashed && foe.dip > 0 && me.ink < MASH_DIP_BELOW) return { type: 'dip' };
+
   // Low ink: back off out of reach, then dip.
   if (me.ink < style.dipBelow) {
     if (gap > reachOf('thrust', rules) + 0.6 || foe.dip > 0 || atWall(me, rules)) return { type: 'dip' };
@@ -394,9 +429,9 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   }
 
   // Punish a dipping or stunned player.
-  const open = style.riposte !== false && (foe.dip > 0 || foe.stun > 0);
+  const open = style.riposte !== false && state.tick >= mem.calmUntil && (foe.dip > 0 || foe.stun > 0);
 
-  if (state.tick >= mem.pressAt || open) {
+  if (state.tick >= mem.pressAt + (mashed ? msToTicks(MASH_PRESS_EXTRA_MS, rules) : 0) || open) {
     let kind = pickKind(rng, style.kinds, gap, rules);
     // The mirror: answer with the player's own last kind when it reaches.
     if (style.mirror && mem.foeLastKind && reachOf(mem.foeLastKind, rules) >= gap && rng.next() < style.mirror) kind = mem.foeLastKind;
@@ -406,8 +441,9 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
     // Too little ink for this stroke: back off, and dip with its back to the wall
     // (a master with a low dipBelow otherwise stepped into the wall forever).
     if (me.ink < inkCost(kind, segLength(line), AI_STROKE_SPEED, rules)) return atWall(me, rules) ? { type: 'dip' } : { type: 'step', dir: 'out' };
-    const windup = realWindup(style.windupMs + rng.next() * style.windupJitterMs, rules);
-    if (rng.next() < style.feintChance) {
+    // Against a masher: one slow committed line, no feint.
+    const windup = Math.max(mashed ? MASH_LINE_MS : 0, realWindup(style.windupMs + rng.next() * style.windupJitterMs, rules));
+    if (rng.next() < style.feintChance && !mashed) {
       mem.feintDropAt = state.tick + Math.max(1, msToTicks(style.feintDropMs, rules));
       mem.feintFollow = style.feintFollow === 'other' ? otherKind(rng, style.kinds, kind) : pickKind(rng, style.kinds, gap, rules);
       mem.feintFollowUntil = mem.feintDropAt + msToTicks(FEINT_FOLLOW_MOVE_MS, rules);

@@ -13,7 +13,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canAct, createDuel, inkCost, stepDuel, DUEL_RULES, type Duel, type DuelAction, type Segment } from './duel.js';
-import { STYLES, aiAct, createAi, parryCutAcross, telegraphSegment, type AiStyle } from './ai.js';
+import { CHAIN_MS, STYLES, aiAct, createAi, parryCutAcross, telegraphSegment, type AiStyle } from './ai.js';
+import { MASTERS } from './masters.js';
 
 type Bot = (duel: Duel, mem: { judged: number }) => DuelAction | null;
 
@@ -220,3 +221,41 @@ test('Oro never starts a press over a stroke he means to cut: no spammer point l
   assert.ok(hits > 0, 'the spammer should still score while Oro dips');
   assert.equal(late, 0);
 });
+
+// Mashing must not beat masters 2 to 8.
+// Same SPAMMER, seeds 1 to 60, against each master's own style. Bars: median
+// duel 30 s or more and the spammer wins under half. Oro is checked above.
+const spamVs = MASTERS.filter((m) => m.index >= 2).map((m) => ({ m, t: play(SPAMMER, m.style, SEEDS), p: play(PARRIER, m.style, SEEDS) }));
+console.log(`# SPAMMER vs masters 2-8: ${spamVs.map(({ m, t }) => `${m.name} ${fmt(t)}`).join('; ')}`);
+console.log(`# PARRIER vs masters 2-8 (info): ${spamVs.map(({ m, p }) => `${m.name} ${fmt(p)}`).join('; ')}`);
+
+for (const { m, t } of spamVs) {
+  test(`mashing does not beat master ${m.index} ${m.name}: median 30 s or more, wins under half (SPAMMER ${fmt(t)})`, () => {
+    assert.equal(t.finished, SEEDS, `${m.name}: ${t.finished} finished`);
+    assert.ok(t.medianS >= 30, `${m.name}: median ${t.medianS} s`);
+    assert.ok(t.winRate < 0.5, `${m.name}: spammer won ${t.wins}/${SEEDS}`);
+  });
+}
+
+test(`mashing still never beats Oro (SPAMMER ${res.spammer.wins}/${SEEDS} wins)`, () => {
+  assert.equal(res.spammer.wins, 0);
+});
+// A patient masher presses once every intervalMs, just past
+// the chain window. Bar: it wins under 10 percent against masters 2 to 8.
+const patientMasher = (intervalMs: number): Bot => (duel, mem) => {
+  if (duel.state.phase !== 'fight') return null;
+  const [me, foe] = duel.state.fighters;
+  const m = mem as { judged: number; last?: number };
+  if (me.strike && me.strike.startTick !== m.last) m.last = me.strike.startTick;
+  if (!canAct(me)) return null;
+  if (lowInk(duel)) return { type: 'dip' };
+  if (Math.abs(foe.x - me.x) > R.REACH_CUT - 0.1) return { type: 'step', dir: 'in' };
+  if (m.last !== undefined && (duel.state.tick - m.last) * (1000 / R.TICK_HZ) < intervalMs) return null;
+  return cutAction(telegraphSegment('cut', me, 0.5, duel.rules));
+};
+const patientVs = [2600, CHAIN_MS - 100].map((ms) => ({ ms, rows: MASTERS.filter((m) => m.index >= 2).map((m) => ({ m, t: play(patientMasher(ms), m.style, SEEDS) })) }));
+for (const { ms, rows } of patientVs) {
+  test(`a patient masher pressing every ${ms} ms wins under 10 percent against masters 2 to 8 (${rows.map(({ m, t }) => `${m.name} ${t.wins}/${SEEDS}`).join(', ')})`, () => {
+    for (const { m, t } of rows) assert.ok(t.winRate < 0.1, `${m.name}: won ${t.wins}/${SEEDS} at ${ms} ms`);
+  });
+}
