@@ -364,6 +364,8 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
     mem.willParry = false;
     return strokeAction('cut', parryCutAcross(t.segment));
   }
+  // Oro waits to cut a judged player line; he never starts his own press over it (his tell).
+  if (t && style.cutsFirst && mem.willParry && mem.judged === t.startTick) return null;
 
   if (!canAct(me)) return null;
 

@@ -199,3 +199,24 @@ test('Oro cuts a stroke started first and does not strike back or rush the stunn
   assert.equal(oroStrikes, 0);
   assert.deepEqual(d.state.score, [0, 0]);
 });
+
+test('Oro never starts a press over a stroke he means to cut: no spammer point lands on an Oro line begun at or after the stroke', () => {
+  let late = 0;
+  let hits = 0;
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const duel = createDuel(seed);
+    const ai = createAi(oro, 1, seed);
+    const mem = { judged: -1 };
+    while (duel.state.phase !== 'over' && duel.state.tick < 60 * 300) {
+      const mine = duel.state.fighters[0].strike;
+      const his = duel.state.fighters[1].strike;
+      for (const e of stepDuel(duel, [SPAMMER(duel, mem), aiAct(ai, duel)])) {
+        if (e.type !== 'hit' || e.who !== 0) continue;
+        hits++;
+        if (mine && his && his.startTick >= mine.startTick) late++;
+      }
+    }
+  }
+  assert.ok(hits > 0, 'the spammer should still score while Oro dips');
+  assert.equal(late, 0);
+});

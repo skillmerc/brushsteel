@@ -187,7 +187,7 @@ export const DUEL_RULES = {
   FEINT_RECOVER_MS: 100,
 
   /**
-   * A foe line that has shown for at least this long is a committed wind-up.
+   * A foe line with a windup of at least this long is a committed wind-up.
    * A strike landing on a committed wind-up whose line showed
    * before the strike started is turned aside ('blocked'): the striker is
    * staggered until that line lands plus COMMIT_STAGGER_MS, so the line lands
