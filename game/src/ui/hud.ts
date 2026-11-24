@@ -8,6 +8,7 @@
 
 import { HUD_SIDE, hudSideCss } from '../core/hudVis.js';
 import { guardDragClicks } from './dragGuard.js';
+import { MISS_CUE_MS } from '../core/missCue.js';
 
 export interface HudState {
   ink: [number, number];
@@ -20,6 +21,8 @@ export interface Hud {
   update(s: HudState): void;
   showResult(won: boolean, seconds: string, score: [number, number]): void;
   hideResult(): void;
+  /** A short line under your seals for a moment: why your stroke did not score. */
+  cue(text: string): void;
   dispose(): void;
 }
 
@@ -34,6 +37,9 @@ body.bs-pathscreen .bs-hud{display:none}
 .bs-hud .bs-side.r .bs-meter i{transform-origin:right center}
 .bs-seals{margin-top:9px;display:flex;gap:7px}
 .bs-hud .bs-side.r .bs-seals{justify-content:flex-end}
+.bs-sealcap{margin-top:5px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.6}
+.bs-cue{margin-top:8px;font-size:16px;letter-spacing:.06em;color:#a61e18;opacity:0;transform:translateY(-3px);transition:opacity .12s,transform .12s}
+.bs-cue.on{opacity:1;transform:none}
 .bs-seal{width:20px;height:20px;border:1.5px solid rgba(166,30,24,.35);border-radius:3px;box-sizing:border-box}
 .bs-seal.on{background:#a61e18;border-color:#a61e18;box-shadow:inset 0 0 0 3px #a61e18,inset 0 0 0 4.5px rgba(239,230,210,.75)}
 .bs-help{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:14px;opacity:.62}
@@ -54,8 +60,8 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
   const root = document.createElement('div');
   root.className = 'bs-hud';
   root.innerHTML = `
-    <div class="bs-side l"><div class="bs-name">You</div><div class="bs-meter"><i></i></div><div class="bs-seals"></div></div>
-    <div class="bs-side r"><div class="bs-name"></div><div class="bs-meter"><i></i></div><div class="bs-seals"></div></div>
+    <div class="bs-side l"><div class="bs-name">You</div><div class="bs-meter"><i></i></div><div class="bs-seals"></div><div class="bs-sealcap">Your hits</div><div class="bs-cue" aria-live="polite"></div></div>
+    <div class="bs-side r"><div class="bs-name"></div><div class="bs-meter"><i></i></div><div class="bs-seals"></div><div class="bs-sealcap">Master's hits</div></div>
     <div class="bs-help">Drag across to cut, down for an overhead, click to thrust. Cut across the faint line to parry. <span class="bs-keys"></span></div>
     <div class="bs-result"><div class="bs-card"><div class="bs-title"></div><div class="bs-line bs-time"></div><div class="bs-line bs-score"></div><button class="bs-btn" type="button">Restart</button><div class="bs-line" style="font-size:13px;opacity:.6">or press R</div></div></div>`;
   document.body.appendChild(root);
@@ -71,6 +77,9 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
   button.textContent = buttonLabel;
   const keysLine = q<HTMLElement>('.bs-keys');
   const pressLine = q<HTMLElement>('.bs-line', 2);
+  const caps = [q<HTMLElement>('.bs-sealcap', 0), q<HTMLElement>('.bs-sealcap', 1)];
+  const cueLine = q<HTMLElement>('.bs-cue');
+  let cueTimer = 0;
   // Keys can change in Pause > Settings > Keys mid-fight: both lines follow the bindings.
   let lastControls = '';
   let lastRestart = '';
@@ -100,6 +109,8 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
       if (seals !== s.hitsToWin) {
         seals = s.hitsToWin;
         for (const row of sealRows) row.innerHTML = '<span class="bs-seal"></span>'.repeat(seals);
+        caps[0].textContent = `Your hits, first to ${seals}`;
+        caps[1].textContent = 'Master's hits';
         lastScore[0] = lastScore[1] = -1;
       }
       for (let i = 0; i < 2; i++) {
@@ -125,6 +136,12 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
     },
     hideResult() {
       result.classList.remove('on');
+    },
+    cue(text) {
+      cueLine.textContent = text;
+      cueLine.classList.add('on');
+      window.clearTimeout(cueTimer);
+      cueTimer = window.setTimeout(() => cueLine.classList.remove('on'), MISS_CUE_MS);
     },
     dispose() {
       root.remove();

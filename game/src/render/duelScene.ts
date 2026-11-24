@@ -23,6 +23,7 @@ import { DUEL_RULES, type FighterMods } from '../core/duel.js';
 import { cuesForEvent, moveCue, strokeSpeed, tensionOf } from '../core/audiomix.js';
 import { gameAudio } from '../audio/index.js';
 import { createHud } from '../ui/hud.js';
+import { missCue } from '../core/missCue.js';
 import { DEFAULT_KEYS, actionForKey, controlsLine, keyLabel, type KeyBindings } from '../core/keys.js';
 import { createFigureView, type FigureView } from './figure.js';
 import type { PadFrame } from '../input/gamepad.js';
@@ -424,6 +425,8 @@ export function createDuelScene(stage: Stage, ink: InkComposer, canvas: HTMLCanv
         }
         cueCtx.hitsToWin = m.duel.rules.HITS_TO_WIN;
         for (const c of cuesForEvent(e, cueCtx)) gameAudio.play(c);
+        const miss = opts.demo ? null : missCue(e, PLAYER);
+        if (miss) hud.cue(miss);
         if (e.type === 'hit') {
           const hitter = st.fighters[e.who];
           const victim = st.fighters[e.who === 0 ? 1 : 0];
