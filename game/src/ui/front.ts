@@ -6,6 +6,7 @@
 import { MASTERS } from '../core/masters.js';
 import { STROKE_DEMOS, clampVolume, demoPath, frontReducer, nextFocus, strokeCutsTitle, type FrontAction, type FrontScreen, type Settings, type StrokeDemo } from '../core/front.js';
 import { guardDragClicks } from './dragGuard.js';
+import { versionLabel } from '../version.js';
 import { DEFAULT_KEYS, KEY_ACTIONS, controlsLine, keyLabel, pressRebind, type KeyAction, type KeyBindings } from '../core/keys.js';
 
 const INK = '#1b1611';
@@ -23,6 +24,7 @@ const CSS = `
 .bs-title .b{clip-path:polygon(0 52%,100% 52%,100% 100%,0 100%)}
 .bs-title.cut .a{transform:translate(-.08em,-.06em) rotate(-1.2deg);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
 .bs-title.cut .b{transform:translate(.08em,.05em) rotate(.8deg);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.bs-ver{position:fixed;right:18px;bottom:12px;margin:0;font-size:12px;letter-spacing:.1em;opacity:.5;pointer-events:none}
 .bs-hint{margin-top:34px;font-size:18px;letter-spacing:.06em;opacity:.75;text-align:center}
 .bs-front button{font:inherit;color:${INK};background:none;border:0;cursor:pointer}
 .bs-enter{margin-top:14px;font-size:15px!important;letter-spacing:.14em;text-transform:uppercase;opacity:.6;padding:8px 14px;border-bottom:1.5px solid transparent!important}
@@ -394,7 +396,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
     const hint = el('p', 'bs-hint', 'Draw a stroke across the name to begin');
     const enter = el('button', 'bs-enter', 'Or press Enter');
     enter.type = 'button';
-    w.append(title, hint, enter);
+    w.append(title, hint, enter, el('p', 'bs-ver', versionLabel()));
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'bs-trail');
     svg.setAttribute('aria-hidden', 'true');
@@ -556,6 +558,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
       el('h3', '', 'Algorithms'),
       el('p', '', 'Seeded random numbers: mulberry32. String to seed: FNV-1a. Stroke matching: the $1 unistroke recogniser idea (Wobbrock, Wilson and Li, 2007), written fresh.'),
       el('p', 'bs-note', 'The full list with sources and licences is in CREDITS.md with the game code.'),
+      el('p', 'bs-note', `Version ${versionLabel()}.`),
     );
     panel(w, [el('h2', 'bs-h', 'Credits')], [t], backButton(() => dispatch({ type: 'back' })));
   };
@@ -650,7 +653,7 @@ export function createPause(h: PauseHandlers & { lifeAtStake: () => boolean }) {
         item2('Settings', 'Volume, ink quality and keys', h.onSettings),
         item2('Quit to menu', h.lifeAtStake() ? 'Leaving this fight costs a life' : 'Back to the main menu', h.onQuit),
       );
-      w.appendChild(list);
+      w.append(list, el('p', 'bs-ver', versionLabel()));
     } else {
       const b = el('button', 'bs-back', 'Back');
       b.type = 'button';
