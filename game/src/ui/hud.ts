@@ -7,6 +7,7 @@
 // Path screen is up, body.bs-pathscreen hides the whole HUD and help line.
 
 import { HUD_SIDE, hudSideCss } from '../core/hudVis.js';
+import { guardDragClicks } from './dragGuard.js';
 
 export interface HudState {
   ink: [number, number];
@@ -81,6 +82,7 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
   };
   drawKeys();
   button.addEventListener('click', onRestart);
+  guardDragClicks(q<HTMLElement>('.bs-result'));
 
   // Last drawn values: the DOM is touched only on change.
   const lastInk = [-1, -1];

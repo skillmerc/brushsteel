@@ -5,6 +5,7 @@
 
 import { MASTERS } from '../core/masters.js';
 import { STROKE_DEMOS, clampVolume, demoPath, frontReducer, nextFocus, strokeCutsTitle, type FrontAction, type FrontScreen, type Settings, type StrokeDemo } from '../core/front.js';
+import { guardDragClicks } from './dragGuard.js';
 import { DEFAULT_KEYS, KEY_ACTIONS, controlsLine, keyLabel, pressRebind, type KeyAction, type KeyBindings } from '../core/keys.js';
 
 const INK = '#1b1611';
@@ -12,7 +13,7 @@ const RED = '#a61e18';
 const PAPER = '#efe6d2';
 
 const CSS = `
-.bs-front{position:fixed;inset:0;z-index:25;overflow:auto;font:17px/1.45 Georgia,'Times New Roman',serif;color:${INK};touch-action:none}
+.bs-front{position:fixed;inset:0;z-index:25;overflow:auto;font:17px/1.45 Georgia,'Times New Roman',serif;color:${INK};touch-action:none;user-select:none;-webkit-user-select:none}
 .bs-front.veil{background:rgba(239,230,210,.9)}
 .bs-fw{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;box-sizing:border-box}
 .bs-title{position:relative;margin:0;font-weight:400;font-size:clamp(56px,11vw,190px);letter-spacing:.16em;line-height:1;padding-left:.16em;user-select:none;-webkit-user-select:none}
@@ -621,6 +622,7 @@ export function createPause(h: PauseHandlers & { lifeAtStake: () => boolean }) {
   root.style.display = 'none';
   root.style.background = `rgba(239,230,210,.9)`;
   document.body.appendChild(root);
+  guardDragClicks(root);
   let shown: 'paused' | 'settings' | null = null;
   // Keyboard as in the menu: arrows move over the items and Back, Backspace goes back from
   // Settings to Pause (on the Pause list itself it does nothing, as on the main menu; Esc resumes).

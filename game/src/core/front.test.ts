@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_SETTINGS, MET_KEY, SETTINGS_KEY, addMet, frontReducer, loadMet, loadSettings, pauseReducer, qualityFor,
   median, needsQualityProbe, pickAutoQuality, withAutoQuality,
-  dailyMenuLine, nextFocus, pathPadStep, STROKE_DEMOS, crossesSegment, demoPath, quitFight, saveSettings, startScreen, strokeCutsTitle, type FrontScreen,
+  dailyMenuLine, nextFocus, isDragNotClick, pauseOnBlur, DRAG_CLICK_SLOP_PX, pathPadStep, STROKE_DEMOS, crossesSegment, demoPath, quitFight, saveSettings, startScreen, strokeCutsTitle, type FrontScreen,
 } from './front.js';
 import { PATH_RULES, dailySeed, type PathMap, type RunState } from './path.js';
 import type { KeyValueStore } from './save.js';
@@ -241,4 +241,20 @@ test('auto quality: the player choice wins, the address wins, saved and loaded',
   assert.deepEqual(loadSettings(store), { volume: 80, quality: 'low', qualityBy: 'player' });
   store.setItem(SETTINGS_KEY, '{"volume":50,"quality":"high","qualityBy":"robot"}');
   assert.deepEqual(loadSettings(store), { volume: 50, quality: 'high' });
+});
+
+test('front: a cut dragged over a button is not a click; a still press is', () => {
+  assert.equal(isDragNotClick({ x: 100, y: 100 }, { x: 103, y: 104 }), false);
+  assert.equal(isDragNotClick({ x: 100, y: 100 }, { x: 100 + DRAG_CLICK_SLOP_PX + 1, y: 100 }), true);
+  assert.equal(isDragNotClick({ x: 10, y: 10 }, { x: 400, y: 260 }), true);
+  assert.equal(isDragNotClick(null, { x: 0, y: 0 }), false);
+});
+
+test('front: a blur pauses a live fight only when the page has really lost focus', () => {
+  const live = { playing: true, fighting: true };
+  assert.equal(pauseOnBlur({ ...live, hasFocus: true, hidden: false }), false);
+  assert.equal(pauseOnBlur({ ...live, hasFocus: false, hidden: false }), true);
+  assert.equal(pauseOnBlur({ ...live, hasFocus: true, hidden: true }), true);
+  assert.equal(pauseOnBlur({ playing: false, fighting: true, hasFocus: false, hidden: false }), false);
+  assert.equal(pauseOnBlur({ playing: true, fighting: false, hasFocus: false, hidden: false }), false);
 });

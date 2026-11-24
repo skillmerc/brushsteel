@@ -6,7 +6,7 @@ import { seedFromString } from './core/rng.js';
 import { STAGE_LOOK_IDS } from './core/stages.js';
 import { masterByIndex } from './core/masters.js';
 import { guardStore, memoryStore, openSession } from './core/session.js';
-import { AUTO_PROBE_MS, AUTO_PROBE_SKIP_MS, addMet, dailyMenuLine, loadMet, loadSettings, needsQualityProbe, pauseReducer, pickAutoQuality, qualityFor, saveSettings, startScreen, withAutoQuality, type PauseState, type Settings } from './core/front.js';
+import { AUTO_PROBE_MS, AUTO_PROBE_SKIP_MS, BLUR_PAUSE_CHECK_MS, pauseOnBlur, addMet, dailyMenuLine, loadMet, loadSettings, needsQualityProbe, pauseReducer, pickAutoQuality, qualityFor, saveSettings, startScreen, withAutoQuality, type PauseState, type Settings } from './core/front.js';
 import { loadKeys, saveKeys, type KeyBindings } from './core/keys.js';
 import { createPathMode, type PathMode } from './pathMode.js';
 import { createModeSwitch } from './ui/modeSwitch.js';
@@ -196,8 +196,15 @@ if (duel && demo === null) {
     e.preventDefault();
     setPause({ type: 'esc' });
   });
+  // Pause when the page really loses focus, read a moment after the blur, so a
+  // blur while a cut is drawn (focus moving inside the page) never opens Pause.
   window.addEventListener('blur', () => {
-    if (pause === 'playing' && (!path || path.fighting)) setPause({ type: 'esc' });
+    window.setTimeout(() => {
+      if (pauseOnBlur({ playing: pause === 'playing', fighting: !path || path.fighting, hasFocus: document.hasFocus(), hidden: document.hidden })) setPause({ type: 'esc' });
+    }, BLUR_PAUSE_CHECK_MS);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && pause === 'playing' && (!path || path.fighting)) setPause({ type: 'esc' });
   });
 }
 

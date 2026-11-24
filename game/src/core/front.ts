@@ -48,6 +48,27 @@ export function pauseReducer(state: PauseState, action: PauseAction): PauseState
   return state;
 }
 
+/** A press that moves this far (CSS px) before it is let go is a drag (a cut), not a click on a button. */
+export const DRAG_CLICK_SLOP_PX = 8;
+
+/** True when a press from `down` to `up` was a drag, so a button under it must not take it as a click. */
+export function isDragNotClick(down: { x: number; y: number } | null, up: { x: number; y: number }, slopPx = DRAG_CLICK_SLOP_PX): boolean {
+  if (!down) return false;
+  return Math.hypot(up.x - down.x, up.y - down.y) > slopPx;
+}
+
+/**
+ * A window blur pauses a live fight only when the page has really lost focus
+ * (another window or tab), checked a moment after the blur. A blur that comes
+ * and goes while the player draws a cut (focus moving inside the page) does not.
+ */
+export function pauseOnBlur(s: { playing: boolean; fighting: boolean; hasFocus: boolean; hidden: boolean }): boolean {
+  return s.playing && s.fighting && (s.hidden || !s.hasFocus);
+}
+
+/** Ms after a blur before pauseOnBlur reads the focus again. */
+export const BLUR_PAUSE_CHECK_MS = 150;
+
 /**
  * Quit to menu from Pause. In Path mode a fight under way is booked at once as one
  * loss, the same rule openSession applies to a fight left by reload (bookLeftFight).
