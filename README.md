@@ -33,7 +33,7 @@ The browser checks (first frame, frame rate, resize, screens, a scripted duel) l
 
 ## Credits and licence
 
-Made by Kyle Pretorius for the OpenGame Game Jam #1. Fighting track.
+Made by SKILLMERC for the OpenGame Game Jam #1. Fighting track.
 
 Copyright 2026 Kyle Pretorius. All rights reserved. The source is published so the jam judges and players can read it; it is not open source. Terms: `LICENSE`. Third-party code keeps its own licence: `NOTICE`. Outside libraries, tools and how the game was made: `game/CREDITS.md`.
 

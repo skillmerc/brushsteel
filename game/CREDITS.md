@@ -1,6 +1,6 @@
 # BRUSHSTEEL credits
 
-Made by Kyle Pretorius for the OpenGame Game Jam #1. Fighting track.
+Made by SKILLMERC for the OpenGame Game Jam #1. Fighting track.
 
 All game code in this folder was written during the jam, from 19 Nov 2026. Every outside file, library or asset is listed here with its source, licence and the date it was added.
 
