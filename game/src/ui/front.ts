@@ -542,7 +542,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
     };
     sec('Strike', [
       'Drag across the screen to cut. Drag down for an overhead, up for a rising cut.',
-      'Click without dragging to thrust.',
+      'Click without dragging to thrust. A ready master turns a thrust aside: thrust right after you parry.',
       'Slow strokes do nothing. Draw them with intent.',
     ], demos(['cut', 'overhead', 'rising', 'thrust']));
     sec('Parry', [
