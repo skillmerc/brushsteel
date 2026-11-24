@@ -110,7 +110,7 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
         seals = s.hitsToWin;
         for (const row of sealRows) row.innerHTML = '<span class="bs-seal"></span>'.repeat(seals);
         caps[0].textContent = `Your hits, first to ${seals}`;
-        caps[1].textContent = 'Master's hits';
+        caps[1].textContent = "Master's hits";
         lastScore[0] = lastScore[1] = -1;
       }
       for (let i = 0; i < 2; i++) {
