@@ -53,6 +53,15 @@ export const REAL_LINE_FLOOR_MS = 350;
 export const CHAIN_MS = 4500;
 export const MASH_LINE_MS = 800;
 export const MASH_PRESS_EXTRA_MS = 5000;
+/**
+ * Thrusts. A click thrust is a dot: its line has no length, so no cut can
+ * cross it. Every master answers a thrust it means to parry with a circle
+ * guard instead, which turns it aside. A thrust that starts within CHAIN_MS of
+ * the player's previous attack is a repeated thrust: the master also presses
+ * at once with a committed line (a thrust of its own if nothing else reaches),
+ * so the next thrust thrown into that line is turned aside and the line lands.
+ * Oro guards every thrust that can reach him.
+ */
 /** A master dips with a mashing player who dips when its own ink is under this. */
 export const MASH_DIP_BELOW = 60;
 
@@ -288,6 +297,8 @@ interface AiMemory {
   foeLastStrike: number;
   /** The judged foe line is a chained stroke. */
   chained: boolean;
+  /** Press at once with a committed line: the player repeated a thrust. */
+  punish: boolean;
   /** No riposte and no rush before this tick (after cutting a chained stroke). */
   calmUntil: number;
   lastPhase: string;
@@ -306,7 +317,7 @@ export function createAi(style: AiStyle, who: 0 | 1, seed: number): AiController
     who,
     style,
     rng: createRng((seed ^ 0x9e3779b9 ^ (who * 0x85ebca6b)) >>> 0),
-    mem: { pressAt: -1, judged: -1, parryAt: 0, willParry: false, feintDropAt: -1, feintFollow: null, feintFollowUntil: -1, foeLastKind: null, foeLastStrike: -1, chained: false, calmUntil: -1, lastPhase: 'fight', feints: 0 },
+    mem: { pressAt: -1, judged: -1, parryAt: 0, willParry: false, feintDropAt: -1, feintFollow: null, feintFollowUntil: -1, foeLastKind: null, foeLastStrike: -1, chained: false, punish: false, calmUntil: -1, lastPhase: 'fight', feints: 0 },
   };
 }
 
@@ -352,6 +363,7 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
     mem.pressAt = state.tick + rollTicks(rng, style.pressMinMs, style.pressMaxMs, rules);
     mem.feintDropAt = -1;
     mem.feintFollow = null;
+    mem.punish = false;
   }
   mem.lastPhase = 'fight';
 
@@ -378,8 +390,10 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   if (t && t.startTick !== mem.judged) {
     mem.judged = t.startTick;
     mem.foeLastKind = t.kind;
-    mem.chained = !style.cutsFirst && mem.foeLastStrike >= 0 && t.startTick - mem.foeLastStrike <= msToTicks(CHAIN_MS, rules);
+    const repeat = mem.foeLastStrike >= 0 && t.startTick - mem.foeLastStrike <= msToTicks(CHAIN_MS, rules);
+    mem.chained = !style.cutsFirst && repeat;
     mem.foeLastStrike = t.startTick;
+    if (t.kind === 'thrust' && repeat) mem.punish = true;
     // A chained stroke is always cut (the rng is still rolled, so other rolls stay the same).
     mem.willParry = threatens(t, gap, rules) && (rng.next() < style.parryChance || mem.chained);
     mem.parryAt = t.startTick + msToTicks(style.reactionMs, rules);
@@ -387,6 +401,15 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   // Oro: a line out of reach when it appeared is cut once it comes into reach.
   if (t && style.cutsFirst && !mem.willParry && mem.judged === t.startTick && threatens(t, gap, rules) && t.landsAtTick > state.tick) {
     mem.willParry = rng.next() < style.parryChance;
+  }
+  // A thrust is a dot no cut can cross: turn it aside with a circle guard.
+  if (t && t.kind === 'thrust' && mem.willParry && mem.judged === t.startTick && state.tick >= mem.parryAt) {
+    if (me.ink < rules.GUARD_INK) mem.willParry = false;
+    else if (me.stun === 0 && me.recover === 0 && me.dip === 0 && me.strike === null) {
+      // The core lets a guard stop a step, as it lets a parry cut.
+      mem.willParry = false;
+      return { type: 'stroke', kind: 'parry', speed: 0, segment: { a: { x: me.x, y: 1.5 }, b: { x: me.x, y: 1.5 } }, length: 0 };
+    }
   }
   const freeToParry = style.cutsFirst || mem.chained ? me.stun === 0 && me.recover === 0 && me.dip === 0 && me.strike === null : canAct(me);
   if (t && mem.willParry && mem.judged === t.startTick && state.tick >= mem.parryAt && freeToParry) {
@@ -431,19 +454,21 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
   // Punish a dipping or stunned player.
   const open = style.riposte !== false && state.tick >= mem.calmUntil && (foe.dip > 0 || foe.stun > 0);
 
-  if (state.tick >= mem.pressAt + (mashed ? msToTicks(MASH_PRESS_EXTRA_MS, rules) : 0) || open) {
+  if (state.tick >= mem.pressAt + (mashed && !mem.punish ? msToTicks(MASH_PRESS_EXTRA_MS, rules) : 0) || open || mem.punish) {
     let kind = pickKind(rng, style.kinds, gap, rules);
+    // Punishing a repeated thrust: strike from here, with a thrust if nothing else reaches.
+    if (mem.punish && reachOf(kind, rules) < gap && gap <= reachOf('thrust', rules)) kind = 'thrust';
     // The mirror: answer with the player's own last kind when it reaches.
     if (style.mirror && mem.foeLastKind && reachOf(mem.foeLastKind, rules) >= gap && rng.next() < style.mirror) kind = mem.foeLastKind;
     const reach = reachOf(kind, rules);
-    if (gap > reach - 0.15) return moveToward(me, gap, reach - 0.4, rules) ?? { type: 'step', dir: 'in' };
+    if (gap > reach - (mem.punish ? 0 : 0.15)) return moveToward(me, gap, reach - 0.4, rules) ?? { type: 'step', dir: 'in' };
     const line = telegraphSegment(kind, me, rng.next(), rules);
     // Too little ink for this stroke: back off, and dip with its back to the wall
     // (a master with a low dipBelow otherwise stepped into the wall forever).
     if (me.ink < inkCost(kind, segLength(line), AI_STROKE_SPEED, rules)) return atWall(me, rules) ? { type: 'dip' } : { type: 'step', dir: 'out' };
     // Against a masher: one slow committed line, no feint.
-    const windup = Math.max(mashed ? MASH_LINE_MS : 0, realWindup(style.windupMs + rng.next() * style.windupJitterMs, rules));
-    if (rng.next() < style.feintChance && !mashed) {
+    const windup = Math.max(mashed || mem.punish ? MASH_LINE_MS : 0, realWindup(style.windupMs + rng.next() * style.windupJitterMs, rules));
+    if (rng.next() < style.feintChance && !mashed && !mem.punish) {
       mem.feintDropAt = state.tick + Math.max(1, msToTicks(style.feintDropMs, rules));
       mem.feintFollow = style.feintFollow === 'other' ? otherKind(rng, style.kinds, kind) : pickKind(rng, style.kinds, gap, rules);
       mem.feintFollowUntil = mem.feintDropAt + msToTicks(FEINT_FOLLOW_MOVE_MS, rules);
@@ -452,6 +477,7 @@ export function aiAct(ai: AiController, duel: Duel): DuelAction | null {
       return strokeAction(kind, line, fakeWindup(windup, style.feintDropMs, rules));
     }
     mem.pressAt = state.tick + rollTicks(rng, style.pressMinMs, style.pressMaxMs, rules);
+    mem.punish = false;
     return strokeAction(kind, line, windup);
   }
 

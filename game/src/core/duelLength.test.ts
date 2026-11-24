@@ -259,3 +259,81 @@ for (const { ms, rows } of patientVs) {
     for (const { m, t } of rows) assert.ok(t.winRate < 0.1, `${m.name}: won ${t.wins}/${SEEDS} at ${ms} ms`);
   });
 }
+
+// Thrust spam: plain clicks on the master's body as fast as the duel allows.
+// A click is a dot stroke, so its line has no length and a cut cannot cross
+// it; masters turn a thrust aside with a circle guard and answer a repeated
+// thrust with a committed line. Bars, Oro and masters 2 to 8: the thruster
+// wins under 10 percent and never wins in under 30 s. Before the guard it won
+// 60/60 against every master in a median 2.5 s.
+const THRUST_SPAMMER: Bot = (duel) => {
+  if (duel.state.phase !== 'fight') return null;
+  const [me, foe] = duel.state.fighters;
+  if (!canAct(me)) return null;
+  const dot = { x: foe.x, y: 1.4 };
+  if (me.ink < inkCost('thrust', 0, 0, duel.rules)) return { type: 'dip' };
+  if (Math.abs(foe.x - me.x) > R.REACH_THRUST - 0.1) return { type: 'step', dir: 'in' };
+  return { type: 'stroke', kind: 'thrust', speed: 0, segment: { a: dot, b: { ...dot } }, length: 0 };
+};
+function fastestWin(bot: Bot, style: AiStyle): number {
+  let best = Infinity;
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const duel = createDuel(seed);
+    const ai = createAi(style, 1, seed);
+    const mem = { judged: -1 };
+    while (duel.state.phase !== 'over' && duel.state.tick < 60 * 300) stepDuel(duel, [bot(duel, mem), aiAct(ai, duel)]);
+    if (duel.state.phase === 'over' && duel.state.winner === 0) best = Math.min(best, duel.state.tick / 60);
+  }
+  return best;
+}
+const thrustVs = MASTERS.map((m) => ({ m, t: play(THRUST_SPAMMER, m.style, SEEDS), fastest: fastestWin(THRUST_SPAMMER, m.style) }));
+console.log(`# THRUST-SPAMMER: ${thrustVs.map(({ m, t }) => `${m.name} ${fmt(t)}`).join('; ')}`);
+
+for (const { m, t, fastest } of thrustVs) {
+  test(`thrust spam does not beat master ${m.index} ${m.name}: wins under 10 percent, none under 30 s (THRUST-SPAMMER ${fmt(t)})`, () => {
+    assert.equal(t.finished, SEEDS, `${m.name}: ${t.finished} finished`);
+    assert.ok(t.winRate < 0.1, `${m.name}: thrust spammer won ${t.wins}/${SEEDS}`);
+    assert.ok(fastest >= 30, `${m.name}: a thrust spammer won in ${fastest} s`);
+  });
+}
+
+test('Oro turns a single thrust aside with a guard and does not press; a repeated thrust gets a committed line', () => {
+  const d = createDuel(5);
+  const ai = createAi(oro, 1, 5);
+  d.state.fighters[0].x = -1.2;
+  d.state.fighters[1].x = 1.2;
+  const foe = d.state.fighters[1];
+  const thrust = (): DuelAction => ({ type: 'stroke', kind: 'thrust', speed: 0, segment: { a: { x: foe.x, y: 1.4 }, b: { x: foe.x, y: 1.4 } }, length: 0 });
+  const seen: string[] = [];
+  for (let i = 0; i < 30; i++) for (const e of stepDuel(d, [i === 0 ? thrust() : null, aiAct(ai, d)])) seen.push(`${e.type}${'who' in e ? e.who : ''}`);
+  assert.ok(seen.includes('guard1') && seen.includes('blocked0'), seen.join(','));
+  assert.ok(!seen.includes('strike1'), seen.join(','));
+  assert.deepEqual(d.state.score, [0, 0]);
+  // A second thrust inside the chain window: guarded, then Oro shows a committed line at once.
+  const more: string[] = [];
+  let oroLine = 0;
+  for (let i = 0; i < 20; i++) {
+    for (const e of stepDuel(d, [i === 0 ? thrust() : null, aiAct(ai, d)])) more.push(`${e.type}${'who' in e ? e.who : ''}`);
+    if (foe.strike && foe.strike.windupMs >= R.COMMIT_MS) oroLine++;
+  }
+  assert.ok(more.includes('blocked0'), more.join(','));
+  assert.ok(oroLine > 0, more.join(','));
+});
+
+test('a circle guard may be drawn mid-step while a foe strike is on its way: it stops the step', () => {
+  const d = createDuel(3);
+  d.state.fighters[0].x = -1.2;
+  d.state.fighters[1].x = 1.2;
+  stepDuel(d, [null, { type: 'step', dir: 'out' }]);
+  assert.ok(d.state.fighters[1].moveTicks > 0);
+  const foe = d.state.fighters[1];
+  stepDuel(d, [{ type: 'stroke', kind: 'thrust', speed: 0, segment: { a: { x: foe.x, y: 1.4 }, b: { x: foe.x, y: 1.4 } }, length: 0 }, null]);
+  const ev = stepDuel(d, [null, { type: 'stroke', kind: 'parry', speed: 0, segment: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }, length: 0 }]);
+  assert.ok(ev.some((e) => e.type === 'guard'), JSON.stringify(ev));
+  assert.equal(d.state.fighters[1].moveTicks, 0);
+  // With no foe strike on its way a guard mid-step still waits.
+  const q = createDuel(3);
+  stepDuel(q, [null, { type: 'step', dir: 'out' }]);
+  const ev2 = stepDuel(q, [null, { type: 'stroke', kind: 'parry', speed: 0, segment: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }, length: 0 }]);
+  assert.ok(!ev2.some((e) => e.type === 'guard'), JSON.stringify(ev2));
+});

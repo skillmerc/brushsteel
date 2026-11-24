@@ -436,7 +436,9 @@ function applyAction(duel: Duel, who: 0 | 1, action: DuelAction, events: DuelEve
     return;
   }
   // A parry cut may be drawn in the middle of a step or dash: it stops the move.
-  if (!canAct(me) && action.type === 'stroke' && isParryMidMove(duel, who, action)) {
+  // So may a circle guard while a foe strike is on its way.
+  const guardMidMove = action.type === 'stroke' && action.kind === 'parry' && me.moveTicks > 0 && foe.strike !== null && me.stun === 0 && me.recover === 0 && me.dip === 0 && me.strike === null;
+  if (!canAct(me) && action.type === 'stroke' && (guardMidMove || isParryMidMove(duel, who, action))) {
     me.moveTicks = 0;
     me.moveDx = 0;
   }
