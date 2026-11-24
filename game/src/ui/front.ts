@@ -66,6 +66,7 @@ const CSS = `
 .bs-more{margin-top:6px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;visibility:hidden}
 .bs-more.on{visibility:visible}
 .bs-howto>.bs-text{width:min(440px,100%)}
+.bs-panel .bs-text,.bs-panel .bs-sub{background:rgba(239,230,210,.88);box-shadow:0 0 0 10px rgba(239,230,210,.88);border-radius:3px}
 @media (max-height:700px){.bs-fw{padding-top:20px;padding-bottom:20px}.bs-h{font-size:34px}.bs-text h3{margin:10px 0 6px}.bs-back{margin-top:10px}}
 .bs-panel>*{flex-shrink:0}
 .bs-scroll{flex:0 1 auto!important;min-height:0;overflow-y:auto;overflow-x:hidden;width:min(1000px,100%);display:flex;flex-direction:column;align-items:center;padding:0 10px;box-sizing:border-box;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(27,22,17,.4) transparent}

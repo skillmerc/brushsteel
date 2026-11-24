@@ -200,11 +200,11 @@ if (duel && demo === null) {
   // blur while a cut is drawn (focus moving inside the page) never opens Pause.
   window.addEventListener('blur', () => {
     window.setTimeout(() => {
-      if (pauseOnBlur({ playing: pause === 'playing', fighting: !path || path.fighting, hasFocus: document.hasFocus(), hidden: document.hidden })) setPause({ type: 'esc' });
+      if (pauseOnBlur({ playing: pause === 'playing', fighting: (!path || path.fighting) && canvas.dataset.phase !== 'over', hasFocus: document.hasFocus(), hidden: document.hidden })) setPause({ type: 'esc' });
     }, BLUR_PAUSE_CHECK_MS);
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && pause === 'playing' && (!path || path.fighting)) setPause({ type: 'esc' });
+    if (document.hidden && pause === 'playing' && (!path || path.fighting) && canvas.dataset.phase !== 'over') setPause({ type: 'esc' });
   });
 }
 

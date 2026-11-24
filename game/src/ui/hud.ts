@@ -62,7 +62,7 @@ export function createHud(onRestart: () => void, buttonLabel = 'Restart', contro
   root.innerHTML = `
     <div class="bs-side l"><div class="bs-name">You</div><div class="bs-meter"><i></i></div><div class="bs-seals"></div><div class="bs-sealcap">Your hits</div><div class="bs-cue" aria-live="polite"></div></div>
     <div class="bs-side r"><div class="bs-name"></div><div class="bs-meter"><i></i></div><div class="bs-seals"></div><div class="bs-sealcap">Master's hits</div></div>
-    <div class="bs-help">Drag across to cut, down for an overhead, click to thrust. Cut across the faint line to parry. <span class="bs-keys"></span></div>
+    <div class="bs-help">Drag across to cut, down for an overhead, click to thrust after a parry. Cut across the faint line to parry. <span class="bs-keys"></span></div>
     <div class="bs-result"><div class="bs-card"><div class="bs-title"></div><div class="bs-line bs-time"></div><div class="bs-line bs-score"></div><button class="bs-btn" type="button">Restart</button><div class="bs-line" style="font-size:13px;opacity:.6">or press R</div></div></div>`;
   document.body.appendChild(root);
   const q = <T extends Element>(sel: string, i = 0) => root.querySelectorAll<T & Element>(sel)[i] as unknown as T;
