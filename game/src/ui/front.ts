@@ -62,6 +62,11 @@ const CSS = `
 .bs-back{margin-top:26px;letter-spacing:.14em;text-transform:uppercase;font-size:15px!important;padding:8px 14px!important;opacity:.75;border-bottom:1.5px solid transparent!important}
 .bs-back:hover,.bs-back:focus-visible{opacity:1;border-bottom-color:${RED}!important;outline:none}
 .bs-fw.bs-panel{height:100%;min-height:0}
+.bs-scroll.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 44px),transparent);mask-image:linear-gradient(#000 calc(100% - 44px),transparent)}
+.bs-more{margin-top:6px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;visibility:hidden}
+.bs-more.on{visibility:visible}
+.bs-howto>.bs-text{width:min(440px,100%)}
+@media (max-height:700px){.bs-fw{padding-top:20px;padding-bottom:20px}.bs-h{font-size:34px}.bs-text h3{margin:10px 0 6px}.bs-back{margin-top:10px}}
 .bs-panel>*{flex-shrink:0}
 .bs-scroll{flex:0 1 auto!important;min-height:0;overflow-y:auto;overflow-x:hidden;width:min(1000px,100%);display:flex;flex-direction:column;align-items:center;padding:0 10px;box-sizing:border-box;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(27,22,17,.4) transparent}
 .bs-scroll .bs-list{flex-shrink:0}
@@ -72,7 +77,7 @@ const CSS = `
 .bs-side ul{flex:1 1 auto;min-width:0}
 .bs-demos{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 12px}
 .bs-demo{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:14px;letter-spacing:.08em}
-.bs-demo svg{display:block;width:120px;height:80px;background:rgba(27,22,17,.045);border-radius:3px}
+.bs-demo svg{display:block;width:96px;height:64px;background:linear-gradient(rgba(27,22,17,.045),rgba(27,22,17,.045)),${PAPER};border-radius:3px}
 .bs-demo .st{fill:none;stroke:${INK};stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100;animation:bs-draw 2.6s ease-in infinite}
 .bs-demo .dot{fill:${INK};transform-box:fill-box;transform-origin:center;animation:bs-dot 2.6s ease-out infinite}
 .bs-demo .ln{stroke:${RED};stroke-width:2;stroke-dasharray:3 4;opacity:0;animation:bs-warn 2.6s linear infinite}
@@ -154,7 +159,17 @@ function panel(w: HTMLElement, head: HTMLElement[], body: HTMLElement[], back: H
   w.classList.add('bs-panel');
   const scroll = el('div', 'bs-scroll');
   scroll.append(...body);
-  w.append(...head, scroll, back);
+  // When the body is taller than its room, its foot fades and a line says there is more.
+  const more = el('p', 'bs-more', 'Scroll for more');
+  const check = () => {
+    const below = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop > 2;
+    scroll.classList.toggle('more', below);
+    more.classList.toggle('on', below);
+  };
+  scroll.addEventListener('scroll', check, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(check).observe(scroll);
+  requestAnimationFrame(check);
+  w.append(...head, scroll, more, back);
 }
 
 /** Volume and quality beside Keys when the window is wide enough, stacked when not. */
@@ -501,7 +516,12 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
   };
 
   const drawHowTo = (w: HTMLElement) => {
-    const t = el('div', 'bs-text');
+    // Two columns side by side when the window is wide enough, one under the other when not.
+    const cols = el('div', 'bs-cols bs-howto');
+    const left = el('div', 'bs-text');
+    const right = el('div', 'bs-text');
+    cols.append(left, right);
+    let t = left;
     const demos = (kinds: StrokeDemo['kind'][]) => {
       const box = el('div', `bs-demos ${settings.quality}`);
       for (const d of STROKE_DEMOS) if (kinds.includes(d.kind)) box.appendChild(strokeDemo(d, box.childElementCount));
@@ -529,6 +549,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
       'When a master gets ready to strike, a faint ink line shows where the blow will land.',
       'Cut across that line to parry, then strike back at once.',
     ], demos(['parry']), true);
+    t = right;
     sec('Move and ink', [
       `${keyLabel(keys.left)} and ${keyLabel(keys.right)}, or the arrow keys, step back and forward. ${keyLabel(keys.dash)} dashes.`,
       `Every stroke spends ink. Hold ${keyLabel(keys.dip)} to dip your brush and refill.`,
@@ -541,7 +562,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
     ]);
     const head = [el('h2', 'bs-h', 'How to play')];
     if (info.padConnected?.()) head.push(el('p', 'bs-pad', PAD_NOTE));
-    panel(w, head, [t], backButton(() => dispatch({ type: 'back' })));
+    panel(w, head, [cols], backButton(() => dispatch({ type: 'back' })));
   };
 
   const drawCredits = (w: HTMLElement) => {
