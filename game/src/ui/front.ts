@@ -569,7 +569,7 @@ export function createFrontEnd(first: FrontScreen, info: FrontInfo, h: FrontHand
   const drawCredits = (w: HTMLElement) => {
     const t = el('div', 'bs-text');
     t.append(
-      el('p', '', 'Made by SKILLMERC for the OpenGame Game Jam #1.'),
+      el('p', '', 'Made by Kyle Pretorius for the OpenGame Game Jam #1.'),
       el('p', '', 'Fighting track.'),
       el('p', '', 'All game code was written during the jam, from 19 Nov 2026.'),
       el('p', '', "The art and sound are drawn and played by the game's own code."),
